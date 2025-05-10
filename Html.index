@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparison Visualizer</title>
+    <style>
+        :root {
+            --item-spacing: 100px;
+            --animation-speed: 30s;
+            --item-color: #3498db;
+            --item-width: 200px;
+            --item-shape: 'rectangle';
+            --visualization-style: 'default';
+            --animation-state: 'running';
+            --branding-opacity: 0;
+            --channel-opacity: 0.7;
+            --channel-position-x: 50%;
+            --channel-position-y: 20px;
+            --channel-font-size: 30px;
+            --highlight-color: rgba(255, 255, 0, 0.3);
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            background-color: #000;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            touch-action: manipulation;
+        }
+        
+        #container {
+            position: relative;
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center;
+        }
+        
+        #visualization-area {
+            position: relative;
+            width: 100%;
+            min-height: 100%;
+            perspective: 1000px;
+            padding: 50px 0;
+            overflow: hidden;
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+        }
+        
+        .slider {
+            display: flex;
+            gap: var(--item-spacing);
+            position: absolute;
+            bottom: 80px;
+            left: 100%;
+            animation: slide var(--animation-speed) linear infinite;
+            animation-play-state: var(--animation-state);
+            z-index: 2;
+        }
+        
+        @keyframes slide {
+            0% { left: 100%; }
+            100% { left: -300%; }
+        }
+        
+        .comparison-item {
+            width: var(--item-width);
+            height: 400px;
+            background: var(--item-color);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            transform-style: preserve-3d;
+        }
+        
+        .comparison-item.highlighted {
+            box-shadow: 0 0 20px 10px var(--highlight-color), 
+                        0 0 30px 15px rgba(255, 255, 255, 0.5);
+            position: relative;
+            z-index: 100;
+        }
+        
+        .comparison-item.highlighted::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border: 2px solid yellow;
+            border-radius: inherit;
+            z-index: -1;
+            animation: pulse-glow 2s infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 10px yellow; opacity: 0.7; }
+            50% { box-shadow: 0 0 20px yellow; opacity: 1; }
+            100% { box-shadow: 0 0 10px yellow; opacity: 0.7; }
+        }
+        
+        /* 3D Material Styles */
+        .material-marble {
+            background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
+            border: 2px solid #a0a0a0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4), 
+                        inset 0 0 20px rgba(255,255,255,0.3);
+        }
+        
+        .material-wood {
+            background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+            border: 2px solid #5D2906;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M0,50 Q25,40 50,50 T100,50" stroke="rgba(0,0,0,0.2)" fill="none" stroke-width="1"/></svg>');
+        }
+        
+        .material-metal {
+            background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
+            border: 2px solid #95a5a6;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4), 
+                        inset 0 0 20px rgba(255,255,255,0.5);
+        }
+        
+        .material-gold {
+            background: linear-gradient(135deg, #FFD700 0%, #D4AF37 100%);
+            border: 2px solid #C5B358;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4), 
+                        inset 0 0 20px rgba(255,255,255,0.5);
+        }
+        
+        .material-glass {
+            background: rgba(200, 220, 255, 0.3);
+            border: 2px solid rgba(255,255,255,0.5);
+            backdrop-filter: blur(5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        
+        /* Visualization Styles */
+        .visualization-default {
+            /* Default style - no changes */
+        }
+        
+        .visualization-walking {
+            animation: walk 0.8s infinite alternate;
+        }
+        
+        @keyframes walk {
+            0% { transform: translateY(0) rotate(-2deg); }
+            100% { transform: translateY(-20px) rotate(2deg); }
+        }
+        
+        .visualization-floating {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-30px); }
+        }
+        
+        .visualization-barchart {
+            height: auto;
+            flex-direction: column-reverse;
+        }
+        
+        .visualization-barchart .item-content {
+            height: calc(var(--item-value-percent) * 3px);
+            background: var(--item-color);
+            width: 100%;
+            justify-content: flex-end;
+        }
+        
+        .visualization-pulsing {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .item-content {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backface-visibility: hidden;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        
+        .item-value {
+            font-size: 1.5em;
+            margin-top: 10px;
+            color: yellow;
+        }
+        
+        .item-icon {
+            font-size: 4em;
+            margin-bottom: 10px;
+            transition: transform 0.3s ease;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .item-image {
+            width: 100%;
+            height: 150px;
+            object-fit: contain;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            margin-bottom: 10px;
+            display: none; /* Hidden by default */
+        }
+        
+        .item-3d {
+            width: 120px;
+            height: 120px;
+            margin: 10px 0;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+            display: none; /* Hidden by default */
+        }
+        
+        .item-name {
+            font-size: 1.1em;
+            margin: 5px 0;
+            word-break: break-word;
+        }
+        
+        .item-info {
+            font-size: 0.9em;
+            margin-top: 5px;
+            color: #ccc;
+            display: none; /* Hidden by default */
+        }
+        
+        .flag-icon {
+            width: 60px;
+            height: 40px;
+            background-size: cover;
+            background-position: center;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            display: none; /* Hidden by default */
+        }
+        
+        .controls {
+            padding: 15px;
+            background-color: #222;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            z-index: 100;
+            max-height: 40vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #555 #222;
+        }
+        
+        .controls::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .controls::-webkit-scrollbar-track {
+            background: #222;
+        }
+        
+        .controls::-webkit-scrollbar-thumb {
+            background-color: #555;
+            border-radius: 4px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            margin: 0 10px;
+            min-width: 150px;
+        }
+        
+        label {
+            color: white;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        select, input, button {
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        #fullscreen-btn {
+            background-color: #f39c12;
+        }
+        
+        #fullscreen-btn:hover {
+            background-color: #e67e22;
+        }
+        
+        #start-btn {
+            background-color: #2ecc71;
+        }
+        
+        #restart-btn {
+            background-color: #e74c3c;
+        }
+        
+        #play-pause-btn {
+            background-color: #3498db;
+        }
+        
+        #branding-btn {
+            background-color: #9b59b6;
+        }
+        
+        #random-colors-btn {
+            background-color: #e67e22;
+        }
+        
+        #highlight-tallest-btn {
+            background-color: #f1c40f;
+            color: #000;
+        }
+        
+        #data-input {
+            width: 100%;
+            height: 100px;
+            margin-top: 10px;
+        }
+        
+        #bg-upload, #music-upload, #image-upload, #flag-upload {
+            display: none;
+        }
+        
+        /* Background Styles */
+        .bg-space {
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%) !important;
+        }
+        
+        .bg-water {
+            background: linear-gradient(to bottom, #1e90ff, #00bfff) !important;
+        }
+        
+        .bg-fire {
+            background: linear-gradient(to bottom, #ff4500, #ff8c00) !important;
+        }
+        
+        .bg-city {
+            background: linear-gradient(to bottom, #1e90ff, #00bfff) !important;
+            background-image: url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80') !important;
+            background-size: cover !important;
+            background-position: center !important;
+        }
+        
+        .bg-stars {
+            background: #000 url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80') !important;
+            background-size: cover !important;
+            background-position: center !important;
+        }
+        
+        .bg-clouds {
+            background: linear-gradient(to bottom, #87CEEB, #E0F7FA) !important;
+            background-image: url('https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80') !important;
+            background-size: cover !important;
+            background-position: center !important;
+        }
+        
+        .bg-mountains {
+            background: linear-gradient(to bottom, #87CEEB, #E0F7FA) !important;
+            background-image: url('https://images.unsplash.com/photo-1511499767150-a48a237f0083?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80') !important;
+            background-size: cover !important;
+            background-position: center !important;
+        }
+        
+        .bg-custom {
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+        }
+        
+        .bg-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -2;
+        }
+        
+        .fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000;
+            background-color: black;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .fullscreen #visualization-area {
+            width: 177.78vh; /* 16:9 aspect ratio based on height */
+            height: 100vh;
+            max-width: 100vw;
+            max-height: 56.25vw; /* 16:9 aspect ratio based on width */
+            margin: auto;
+            overflow: hidden;
+        }
+        
+        .fullscreen-preview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .fullscreen-preview.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .fullscreen-preview-countdown {
+            font-size: 5em;
+            color: white;
+        }
+        
+        .branding-overlay {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1001;
+            opacity: var(--branding-opacity);
+            transition: opacity 0.3s;
+        }
+        
+        .channel-overlay {
+            position: fixed;
+            left: var(--channel-position-x);
+            top: var(--channel-position-y);
+            transform: translateX(-50%)scale(0.8);
+            background: rgba(0,0,0,0.9);
+            color:white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: -1;
+            opacity: 0.5;
+            filter: blur(0.3px);
+            transition: all 0.3s;
+            font-weight: bold;
+            font-size: var(--channel-font-size);
+            text-transform: uppercase;
+            text-shadow:
+            2px 2px 0 #000,
+            4px 4px 2px rbg(0,0,0,0.5),
+            6px 6px 4px rbg(0,0,0,0.3);
+        }
+        
+        .topic-overlay {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1001;
+            max-width: 80%;
+            text-align: center;
+        }
+        
+        /* Shape-specific styles */
+        .comparison-item.circle {
+            border-radius: 50%;
+            width: 200px;
+            height: 200px;
+        }
+        
+        .comparison-item.rounded-rect {
+            border-radius: 20px;
+        }
+        
+        .comparison-item.diamond {
+            transform: rotate(45deg);
+            width: 180px;
+            height: 180px;
+        }
+        
+        .comparison-item.diamond .item-content {
+            transform: rotate(-45deg);
+        }
+        
+        .comparison-item.hexagon {
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            width: 180px;
+            height: 200px;
+        }
+        
+        .comparison-item.pill {
+            border-radius: 100px;
+        }
+        
+        .comparison-item.star {
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            width: 180px;
+            height: 180px;
+        }
+        
+        .comparison-item.triangle {
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            width: 180px;
+            height: 180px;
+        }
+        
+        .position-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .position-controls button {
+            padding: 5px;
+            min-width: 0;
+        }
+        
+        .position-controls button:nth-child(1) {
+            grid-column: 2;
+        }
+        
+        .position-controls button:nth-child(2) {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        .position-controls button:nth-child(3) {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        .position-controls button:nth-child(4) {
+            grid-column: 2;
+            grid-row: 3;
+        }
+        
+        .editable {
+            cursor: text;
+            outline: none;
+            border: 1px dashed transparent;
+            transition: border 0.2s;
+        }
+        
+        .editable:hover {
+            border-color: rgba(255,255,255,0.3);
+        }
+        
+        .editable:focus {
+            border-color: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .music-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .music-controls button {
+            flex: 1;
+        }
+        
+        .channel-size-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .channel-size-controls button {
+            flex: 1;
+        }
+        
+        .media-selection {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .media-selection button {
+            flex: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .control-group {
+                width: 90%;
+            }
+            
+            select, input, button {
+                width: 100%;
+            }
+            
+            .comparison-item {
+                height: 300px;
+            }
+        }
+        
+        @media (orientation: landscape) {
+            .comparison-item {
+                height: 250px;
+            }
+            
+            .item-value {
+                font-size: 1.2em;
+            }
+            
+            .item-image {
+                height: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="visualization-area">
+            <div class="topic-overlay" id="topic-overlay"></div>
+            <div class="channel-overlay" id="channel-overlay"></div>
+            <div class="floor"></div>
+            <div class="slider" id="slider">
+                <!-- Items will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="branding-overlay" id="branding-overlay">
+        Comparison Visualizer<br>v2.0
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="data-format">Data Format</label>
+            <select id="data-format">
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+                <option value="custom">Custom Text</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="data-input">Input Data (use | to separate fields)</label>
+            <textarea id="data-input" placeholder="Enter your comparison data here..."></textarea>
+        </div>
+        
+        <div class="control-group">
+            <label for="topic-input">Topic Title</label>
+            <input type="text" id="topic-input" placeholder="Enter topic title...">
+        </div>
+        
+        <div class="control-group">
+            <label for="channel-input">Channel Name</label>
+            <input type="text" id="channel-input" placeholder="Enter channel name...">
+        </div>
+        
+        <div class="control-group">
+            <label>Media Selection</label>
+            <div class="media-selection">
+                <button id="add-text-btn">Add Text</button>
+                <button id="add-image-btn">Add Image</button>
+                <button id="add-flag-btn">Add Flag</button>
+                <button id="add-icon-btn">Add Icon</button>
+            </div>
+            <input type="file" id="image-upload" accept="image/*">
+            <input type="file" id="flag-upload" accept="image/*">
+        </div>
+        
+        <div class="control-group">
+            <label for="spacing-control">Item Spacing</label>
+            <input type="range" id="spacing-control" min="50" max="300" value="100">
+        </div>
+        
+        <div class="control-group">
+            <label for="width-control">Item Width</label>
+            <input type="range" id="width-control" min="100" max="400" value="200">
+        </div>
+        
+        <div class="control-group">
+            <label for="speed-control">Animation Speed</label>
+            <input type="range" id="speed-control" min="5" max="120" value="30">
+        </div>
+        
+        <div class="control-group">
+            <label for="color-control">Item Color</label>
+            <input type="color" id="color-control" value="#3498db">
+        </div>
+        
+        <div class="control-group">
+            <label for="material-control">Item Material</label>
+            <select id="material-control">
+                <option value="default">Default</option>
+                <option value="marble">Marble</option>
+                <option value="wood">Wood</option>
+                <option value="metal">Metal</option>
+                <option value="gold">Gold</option>
+                <option value="glass">Glass</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="shape-control">Item Shape</label>
+            <select id="shape-control">
+                <option value="rectangle">Rectangle</option>
+                <option value="circle">Circle</option>
+                <option value="rounded-rect">Rounded Rectangle</option>
+                <option value="diamond">Diamond</option>
+                <option value="hexagon">Hexagon</option>
+                <option value="pill">Pill</option>
+                <option value="star">Star</option>
+                <option value="triangle">Triangle</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="visualization-style">Visualization Style</label>
+            <select id="visualization-style">
+                <option value="default">Default</option>
+                <option value="walking">Walking</option>
+                <option value="floating">Floating</option>
+                <option value="barchart">Bar Chart</option>
+                <option value="pulsing">Pulsing</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="bg-style">Background Style</label>
+            <select id="bg-style">
+                <option value="space">Space</option>
+                <option value="water">Water</option>
+                <option value="fire">Fire</option>
+                <option value="city">City Skyline</option>
+                <option value="stars">Starry Night</option>
+                <option value="clouds">Clouds</option>
+                <option value="mountains">Mountains</option>
+                <option value="custom-image">Custom Image</option>
+                <option value="custom-video">Custom Video</option>
+            </select>
+            <input type="file" id="bg-upload" accept="image/*,video/*">
+        </div>
+        
+        <div class="control-group">
+            <label>Channel Controls</label>
+            <button id="channel-opacity-btn">Toggle Opacity</button>
+            <div class="channel-size-controls">
+                <button id="channel-size-up">Increase Size</button>
+                <button id="channel-size-down">Decrease Size</button>
+            </div>
+            <div class="position-controls">
+                <button id="channel-up">⬆️</button>
+                <button id="channel-left">⬅️</button>
+                <button id="channel-right">➡️</button>
+                <button id="channel-down">⬇️</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Background Music</label>
+            <button id="music-upload-btn">Upload Music</button>
+            <div class="music-controls">
+                <button id="music-play-btn">▶️</button>
+                <button id="music-pause-btn">⏸️</button>
+                <button id="music-stop-btn">⏹️</button>
+            </div>
+            <input type="file" id="music-upload" accept="audio/*">
+        </div>
+        
+        <button id="apply-btn">Apply Changes</button>
+        <button id="start-btn">Start Animation</button>
+        <button id="restart-btn">Restart Animation</button>
+        <button id="play-pause-btn">Pause</button>
+        <button id="fullscreen-btn">Full Preview</button>
+        <button id="branding-btn">Toggle Branding</button>
+        <button id="random-colors-btn">Random Colors</button>
+        <button id="highlight-tallest-btn">Highlight Tallest</button>
+        <button id="sample-data-btn">Load Sample Data</button>
+        <button id="edit-mode-btn">Edit Mode</button>
+    </div>
+    
+    <div class="fullscreen-preview" id="fullscreen-preview">
+        <div class="fullscreen-preview-countdown" id="fullscreen-countdown"></div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const visualizationArea = document.getElementById('visualization-area');
+            const slider = document.getElementById('slider');
+            const dataInput = document.getElementById('data-input');
+            const topicInput = document.getElementById('topic-input');
+            const channelInput = document.getElementById('channel-input');
+            const spacingControl = document.getElementById('spacing-control');
+            const widthControl = document.getElementById('width-control');
+            const speedControl = document.getElementById('speed-control');
+            const colorControl = document.getElementById('color-control');
+            const materialControl = document.getElementById('material-control');
+            const shapeControl = document.getElementById('shape-control');
+            const visualizationStyleControl = document.getElementById('visualization-style');
+            const bgStyleControl = document.getElementById('bg-style');
+            const bgUpload = document.getElementById('bg-upload');
+            const musicUpload = document.getElementById('music-upload');
+            const imageUpload = document.getElementById('image-upload');
+            const flagUpload = document.getElementById('flag-upload');
+            const musicUploadBtn = document.getElementById('music-upload-btn');
+            const musicPlayBtn = document.getElementById('music-play-btn');
+            const musicPauseBtn = document.getElementById('music-pause-btn');
+            const musicStopBtn = document.getElementById('music-stop-btn');
+            const addTextBtn = document.getElementById('add-text-btn');
+            const addImageBtn = document.getElementById('add-image-btn');
+            const addFlagBtn = document.getElementById('add-flag-btn');
+            const addIconBtn = document.getElementById('add-icon-btn');
+            const applyBtn = document.getElementById('apply-btn');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            const startBtn = document.getElementById('start-btn');
+            const restartBtn = document.getElementById('restart-btn');
+            const playPauseBtn = document.getElementById('play-pause-btn');
+            const brandingBtn = document.getElementById('branding-btn');
+            const randomColorsBtn = document.getElementById('random-colors-btn');
+            const highlightTallestBtn = document.getElementById('highlight-tallest-btn');
+            const sampleDataBtn = document.getElementById('sample-data-btn');
+            const editModeBtn = document.getElementById('edit-mode-btn');
+            const channelOpacityBtn = document.getElementById('channel-opacity-btn');
+            const channelUpBtn = document.getElementById('channel-up');
+            const channelDownBtn = document.getElementById('channel-down');
+            const channelLeftBtn = document.getElementById('channel-left');
+            const channelRightBtn = document.getElementById('channel-right');
+            const channelSizeUpBtn = document.getElementById('channel-size-up');
+            const channelSizeDownBtn = document.getElementById('channel-size-down');
+            const dataFormat = document.getElementById('data-format');
+            const fullscreenPreview = document.getElementById('fullscreen-preview');
+            const fullscreenCountdown = document.getElementById('fullscreen-countdown');
+            const brandingOverlay = document.getElementById('branding-overlay');
+            const channelOverlay = document.getElementById('channel-overlay');
+            const topicOverlay = document.getElementById('topic-overlay');
+            
+            // App State
+            let items = [];
+            let bgVideoElement = null;
+            let audioElement = null;
+            let isPlaying = true;
+            let scale = 1;
+            let startX, startY, startDistance;
+            let editMode = false;
+            let useRandomColors = false;
+            let highlightTallest = false;
+            let currentMediaType = 'text'; // Default media type
+            
+            // Sample Data
+            const sampleData = {
+                json: JSON.stringify([
+                    {
+                        "name": "Earth",
+                        "value": 9.8,
+                        "valueLabel": "9.8 m/s²",
+                        "category": "Planet",
+                        "country": "Earth",
+                        "icon": "🌍",
+                        "image": "https://cdn.pixabay.com/photo/2011/12/13/14/30/earth-11009_1280.jpg",
+                        "flag": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/International_Flag_of_Planet_Earth.svg/1200px-International_Flag_of_Planet_Earth.svg.png",
+                        "type": "emoji",
+                        "color": "#3498db"
+                    },
+                    {
+                        "name": "Moon",
+                        "value": 1.6,
+                        "valueLabel": "1.6 m/s²",
+                        "category": "Moon",
+                        "country": "Moon",
+                        "icon": "🌕",
+                        "image": "https://cdn.pixabay.com/photo/2016/11/29/08/17/astronaut-1868809_1280.jpg",
+                        "flag": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Flag_of_the_Moon.svg/1200px-Flag_of_the_Moon.svg.png",
+                        "type": "emoji",
+                        "color": "#95a5a6"
+                    }
+                ], null, 2),
+                csv: `name,value,valueLabel,category,country,icon,image,flag,type,color\nEarth,9.8,9.8 m/s²,Planet,Earth,🌍,https://cdn.pixabay.com/photo/2011/12/13/14/30/earth-11009_1280.jpg,https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/International_Flag_of_Planet_Earth.svg/1200px-International_Flag_of_Planet_Earth.svg.png,emoji,#3498db\nMoon,1.6,1.6 m/s²,Moon,Moon,🌕,https://cdn.pixabay.com/photo/2016/11/29/08/17/astronaut-1868809_1280.jpg,https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Flag_of_the_Moon.svg/1200px-Flag_of_the_Moon.svg.png,emoji,#95a5a6`,
+                custom: `Earth | 9.8 m/s² | 🌍 | Planet | Earth | https://cdn.pixabay.com/photo/2011/12/13/14/30/earth-11009_1280.jpg | https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/International_Flag_of_Planet_Earth.svg/1200px-International_Flag_of_Planet_Earth.svg.png | emoji | #3498db\nMoon | 1.6 m/s² | 🌕 | Moon | Moon | https://cdn.pixabay.com/photo/2016/11/29/08/17/astronaut-1868809_1280.jpg | https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Flag_of_the_Moon.svg/1200px-Flag_of_the_Moon.svg.png | emoji | #95a5a6`
+            };
+            
+            // Initialize the app
+            function init() {
+                setupEventListeners();
+                dataInput.value = sampleData.json;
+                topicInput.value = "Planetary Gravity Comparison";
+                channelInput.value = "Science Channel";
+                updateTopic();
+                updateChannel();
+                processData();
+            }
+            
+            // Event Listeners
+            function setupEventListeners() {
+                // Media selection buttons
+                addTextBtn.addEventListener('click', () => { currentMediaType = 'text'; updateMediaSelectionUI(); });
+                addImageBtn.addEventListener('click', () => { imageUpload.click(); currentMediaType = 'image'; });
+                addFlagBtn.addEventListener('click', () => { flagUpload.click(); currentMediaType = 'flag'; });
+                addIconBtn.addEventListener('click', () => { currentMediaType = 'icon'; updateMediaSelectionUI(); });
+                
+                // File upload handlers
+                imageUpload.addEventListener('change', handleImageUpload);
+                flagUpload.addEventListener('change', handleFlagUpload);
+                
+                sampleDataBtn.addEventListener('click', loadSampleData);
+                applyBtn.addEventListener('click', processData);
+                startBtn.addEventListener('click', startAnimation);
+                restartBtn.addEventListener('click', restartAnimation);
+                playPauseBtn.addEventListener('click', togglePlayPause);
+                fullscreenBtn.addEventListener('click', showFullscreenPreview);
+                brandingBtn.addEventListener('click', toggleBranding);
+                randomColorsBtn.addEventListener('click', toggleRandomColors);
+                highlightTallestBtn.addEventListener('click', toggleHighlightTallest);
+                editModeBtn.addEventListener('click', toggleEditMode);
+                topicInput.addEventListener('input', updateTopic);
+                channelInput.addEventListener('input', updateChannel);
+                channelOpacityBtn.addEventListener('click', toggleChannelOpacity);
+                channelUpBtn.addEventListener('click', () => moveChannel('up'));
+                channelDownBtn.addEventListener('click', () => moveChannel('down'));
+                channelLeftBtn.addEventListener('click', () => moveChannel('left'));
+                channelRightBtn.addEventListener('click', () => moveChannel('right'));
+                channelSizeUpBtn.addEventListener('click', increaseChannelSize);
+                channelSizeDownBtn.addEventListener('click', decreaseChannelSize);
+                musicUploadBtn.addEventListener('click', () => musicUpload.click());
+                musicUpload.addEventListener('change', handleMusicUpload);
+                musicPlayBtn.addEventListener('click', playMusic);
+                musicPauseBtn.addEventListener('click', pauseMusic);
+                musicStopBtn.addEventListener('click', stopMusic);
+                bgStyleControl.addEventListener('change', handleBackgroundChange);
+                bgUpload.addEventListener('change', handleBackgroundUpload);
+                document.addEventListener('touchstart', handleTouchStart);
+                document.addEventListener('touchmove', handleTouchMove);
+                document.addEventListener('touchend', handleTouchEnd);
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+                spacingControl.addEventListener('input', updateSpacing);
+                widthControl.addEventListener('input', updateWidth);
+                speedControl.addEventListener('input', updateSpeed);
+                colorControl.addEventListener('input', updateColor);
+                materialControl.addEventListener('input', updateMaterial);
+                shapeControl.addEventListener('input', updateShape);
+                visualizationStyleControl.addEventListener('input', updateVisualizationStyle);
+            }
+            
+            // Media Selection UI
+            function updateMediaSelectionUI() {
+                // Reset all button styles
+                [addTextBtn, addImageBtn, addFlagBtn, addIconBtn].forEach(btn => {
+                    btn.style.backgroundColor = '#4CAF50';
+                });
+                
+                // Highlight the current selection
+                switch(currentMediaType) {
+                    case 'text':
+                        addTextBtn.style.backgroundColor = '#27ae60';
+                        break;
+                    case 'image':
+                        addImageBtn.style.backgroundColor = '#27ae60';
+                        break;
+                    case 'flag':
+                        addFlagBtn.style.backgroundColor = '#27ae60';
+                        break;
+                    case 'icon':
+                        addIconBtn.style.backgroundColor = '#27ae60';
+                        break;
+                }
+            }
+            
+            // File Upload Handlers
+            function handleImageUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const imageUrl = event.target.result;
+                    // Add the image URL to the data input
+                    if (dataInput.value.trim() === '') {
+                        dataInput.value = `New Item | 0 | | | | ${imageUrl} | | image | #3498db`;
+                    } else {
+                        dataInput.value += `\nNew Item | 0 | | | | ${imageUrl} | | image | #3498db`;
+                    }
+                    processData();
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            function handleFlagUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const flagUrl = event.target.result;
+                    // Add the flag URL to the data input
+                    if (dataInput.value.trim() === '') {
+                        dataInput.value = `New Item | 0 | | | | | ${flagUrl} | flag | #3498db`;
+                    } else {
+                        dataInput.value += `\nNew Item | 0 | | | | | ${flagUrl} | flag | #3498db`;
+                    }
+                    processData();
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // Core Functions
+            function loadSampleData() {
+                dataInput.value = sampleData[dataFormat.value];
+                topicInput.value = "Planetary Gravity Comparison";
+                channelInput.value = "Science Channel";
+                updateTopic();
+                updateChannel();
+                processData();
+            }
+            
+            function processData() {
+                const format = dataFormat.value;
+                const input = dataInput.value.trim();
+                
+                try {
+                    if (format === 'json') {
+                        items = JSON.parse(input);
+                    } else if (format === 'csv') {
+                        items = csvToJson(input);
+                    } else if (format === 'custom') {
+                        items = parseCustomFormat(input);
+                    }
+                    
+                    renderItems();
+                } catch (error) {
+                    alert('Error parsing data: ' + error.message);
+                    console.error(error);
+                }
+            }
+            
+            function csvToJson(csv) {
+                const lines = csv.split('\n');
+                const headers = lines[0].split(',').map(h => h.trim());
+                const result = [];
+                
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    
+                    const obj = {};
+                    const currentline = lines[i].split(',');
+                    
+                    for (let j = 0; j < headers.length; j++) {
+                        obj[headers[j]] = currentline[j] ? currentline[j].trim() : '';
+                    }
+                    
+                    result.push(obj);
+                }
+                
+                return result;
+            }
+            
+            function parseCustomFormat(text) {
+                return text.split('\n').filter(line => line.trim()).map(line => {
+                    const parts = line.split('|').map(part => part.trim());
+                    const obj = {};
+                    
+                    // Assign parts to generic field names (field1, field2, etc.)
+                    parts.forEach((part, index) => {
+                        obj[`field${index + 1}`] = part;
+                    });
+                    
+                    // Map known fields for backward compatibility
+                    if (parts.length > 0) obj.name = parts[0];
+                    if (parts.length > 1) obj.valueLabel = parts[1];
+                    if (parts.length > 2) obj.icon = parts[2];
+                    if (parts.length > 3) obj.category = parts[3];
+                    if (parts.length > 4) obj.country = parts[4];
+                    if (parts.length > 5) obj.image = parts[5];
+                    if (parts.length > 6) obj.flag = parts[6];
+                    if (parts.length > 7) obj.type = parts[7];
+                    if (parts.length > 8) obj.color = parts[8];
+                    
+                    // Try to extract numeric value from valueLabel
+                    if (obj.valueLabel) {
+                        const numMatch = obj.valueLabel.match(/(\d+\.?\d*)/);
+                        if (numMatch) {
+                            obj.value = parseFloat(numMatch[1]);
+                        }
+                    }
+                    
+                    return obj;
+                });
+            }
+            
+            function renderItems() {
+                slider.innerHTML = '';
+                
+                if (!items || items.length === 0) return;
+                
+                // Find max value for bar chart scaling and highlighting
+                const maxValue = Math.max(...items.map(item => item.value || 100));
+                
+                // Create multiple copies for seamless looping
+                for (let i = 0; i < 3; i++) {
+                    items.forEach(item => {
+                        const itemElement = document.createElement('div');
+                        itemElement.className = `comparison-item ${shapeControl.value} visualization-${visualizationStyleControl.value}`;
+                        
+                        // Set color
+                        const itemColor = item.color || colorControl.value;
+                        itemElement.style.backgroundColor = itemColor;
+                        itemElement.dataset.originalColor = itemColor;
+                        itemElement.dataset.value = item.value || 100;
+                        
+                        // Highlight if this is the tallest item and highlighting is enabled
+                        if (highlightTallest && (item.value || 100) === maxValue) {
+                            itemElement.classList.add('highlighted');
+                        }
+                        
+                        // Store value for bar chart
+                        if (visualizationStyleControl.value === 'barchart') {
+                            const percent = ((item.value || 100) / maxValue) * 100;
+                            itemElement.style.setProperty('--item-value-percent', percent);
+                        }
+                        
+                        const content = document.createElement('div');
+                        content.className = 'item-content';
+                        
+                        // Add visual representation based on type
+                        if (item.type === 'flag' && item.flag) {
+                            const flag = document.createElement('div');
+                            flag.className = 'flag-icon';
+                            flag.style.backgroundImage = `url(${item.flag})`;
+                            flag.style.display = 'block';
+                            content.appendChild(flag);
+                        } else if (item.type === '3d' && item.image) {
+                            const obj3d = document.createElement('div');
+                            obj3d.className = 'item-3d';
+                            obj3d.style.backgroundImage = `url(${item.image})`;
+                            obj3d.style.display = 'block';
+                            content.appendChild(obj3d);
+                        } else if (item.icon) {
+                            const icon = document.createElement('div');
+                            icon.className = 'item-icon';
+                            icon.textContent = item.icon;
+                            content.appendChild(icon);
+                        } else if (item.image) {
+                            const img = document.createElement('img');
+                            img.className = 'item-image';
+                            img.src = item.image;
+                            img.alt = item.name || 'Item image';
+                            img.style.display = 'block';
+                            content.appendChild(img);
+                        } else {
+                            // Default to text if no visual specified
+                            const initial = document.createElement('div');
+                            initial.className = 'item-icon';
+                            initial.textContent = item.name ? item.name.charAt(0).toUpperCase() : '?';
+                            content.appendChild(initial);
+                        }
+                        
+                        // Add name (use first field if name doesn't exist)
+                        const name = document.createElement('div');
+                        name.className = 'item-name editable';
+                        name.textContent = item.name || item.field1 || 'Unnamed Item';
+                        content.appendChild(name);
+                        
+                        // Add value (use second field if valueLabel doesn't exist)
+                        const value = document.createElement('div');
+                        value.className = 'item-value editable';
+                        value.textContent = item.valueLabel || item.field2 || (item.value ? `${item.value} m/s²` : 'No value');
+                        content.appendChild(value);
+                        
+                        // Add other fields as additional information (only if they exist)
+                        for (let i = 3; i <= 8; i++) {
+                            const fieldValue = item[`field${i}`] || 
+                                             (i === 3 ? item.category : 
+                                              i === 4 ? item.country : 
+                                              i === 5 ? item.image : 
+                                              i === 6 ? item.flag : 
+                                              i === 7 ? item.type : 
+                                              i === 8 ? item.color : '');
+                            
+                            if (fieldValue) {
+                                const info = document.createElement('div');
+                                info.className = 'item-info editable';
+                                info.textContent = fieldValue;
+                                info.style.display = 'block';
+                                content.appendChild(info);
+                            }
+                        }
+                        
+                        itemElement.appendChild(content);
+                        slider.appendChild(itemElement);
+                        
+                        // Add hover effect
+                        itemElement.addEventListener('mouseenter', function() {
+                            if (editMode) return;
+                            this.style.transform = 'scale(1.1) translateZ(50px)';
+                            this.style.zIndex = '10';
+                            const icon = this.querySelector('.item-icon');
+                            if (icon) {
+                                icon.style.transform = 'scale(1.2)';
+                            }
+                        });
+                        
+                        itemElement.addEventListener('mouseleave', function() {
+                            if (editMode) return;
+                            this.style.transform = '';
+                            this.style.zIndex = '';
+                            const icon = this.querySelector('.item-icon');
+                            if (icon) {
+                                icon.style.transform = '';
+                            }
+                        });
+                    });
+                }
+                
+                // Apply random colors if enabled
+                if (useRandomColors) {
+                    applyRandomColors();
+                }
+                
+                // Apply material styling
+                updateMaterial.call(materialControl);
+                
+                // Apply shape styling
+                updateShape.call(shapeControl);
+                
+                // Apply visualization style
+                updateVisualizationStyle.call(visualizationStyleControl);
+                
+                // Set up edit mode if active
+                if (editMode) {
+                    const editables = document.querySelectorAll('.editable');
+                    editables.forEach(el => {
+                        el.contentEditable = true;
+                        el.style.borderColor = 'rgba(255,255,255,0.3)';
+                    });
+                }
+                
+                // Update animation speed
+                slider.style.animationDuration = `${speedControl.value}s`;
+            }
+            
+            // Animation Controls
+            function startAnimation() {
+                document.documentElement.style.setProperty('--animation-state', 'running');
+                isPlaying = true;
+                playPauseBtn.textContent = 'Pause';
+            }
+            
+            function restartAnimation() {
+                slider.style.animation = 'none';
+                void slider.offsetHeight;
+                slider.style.animation = `slide ${speedControl.value}s linear infinite`;
+                document.documentElement.style.setProperty('--animation-state', 'running');
+                isPlaying = true;
+                playPauseBtn.textContent = 'Pause';
+            }
+            
+            function togglePlayPause() {
+                if (isPlaying) {
+                    document.documentElement.style.setProperty('--animation-state', 'paused');
+                    playPauseBtn.textContent = 'Play';
+                } else {
+                    document.documentElement.style.setProperty('--animation-state', 'running');
+                    playPauseBtn.textContent = 'Pause';
+                }
+                isPlaying = !isPlaying;
+            }
+            
+            // UI Controls
+            function toggleBranding() {
+                const currentOpacity = getComputedStyle(document.documentElement).getPropertyValue('--branding-opacity');
+                document.documentElement.style.setProperty('--branding-opacity', currentOpacity === '0' ? '1' : '0');
+            }
+            
+            function toggleRandomColors() {
+                useRandomColors = !useRandomColors;
+                randomColorsBtn.style.backgroundColor = useRandomColors ? '#27ae60' : '#e67e22';
+                randomColorsBtn.textContent = useRandomColors ? 'Single Color' : 'Random Colors';
+                
+                if (useRandomColors) {
+                    applyRandomColors();
+                } else {
+                    updateColor.call(colorControl);
+                }
+            }
+            
+            function toggleHighlightTallest() {
+                highlightTallest = !highlightTallest;
+                highlightTallestBtn.style.backgroundColor = highlightTallest ? '#27ae60' : '#f1c40f';
+                highlightTallestBtn.textContent = highlightTallest ? 'Remove Highlight' : 'Highlight Tallest';
+                
+                const items = document.querySelectorAll('.comparison-item');
+                if (items.length === 0) return;
+                
+                // Remove all highlights first
+                items.forEach(item => {
+                    item.classList.remove('highlighted');
+                });
+                
+                if (highlightTallest) {
+                    // Find the maximum value
+                    const values = Array.from(items).map(item => parseFloat(item.dataset.value || 0));
+                    const maxValue = Math.max(...values);
+                    
+                    // Highlight items with max value
+                    items.forEach(item => {
+                        if (parseFloat(item.dataset.value || 0) === maxValue) {
+                            item.classList.add('highlighted');
+                        }
+                    });
+                }
+            }
+            
+            function toggleEditMode() {
+                editMode = !editMode;
+                editModeBtn.style.backgroundColor = editMode ? '#27ae60' : '#3498db';
+                editModeBtn.textContent = editMode ? 'Exit Edit' : 'Edit Mode';
+                
+                const editables = document.querySelectorAll('.editable');
+                editables.forEach(el => {
+                    el.contentEditable = editMode;
+                    el.style.borderColor = editMode ? 'rgba(255,255,255,0.3)' : 'transparent';
+                });
+            }
+            
+            function updateTopic() {
+                topicOverlay.textContent = topicInput.value || '';
+                const fullscreenTopic = document.querySelector('.fullscreen .topic-overlay');
+                if (fullscreenTopic) {
+                    fullscreenTopic.textContent = topicInput.value || '';
+                }
+            }
+            
+            function updateChannel() {
+                channelOverlay.textContent = channelInput.value || '';
+                const fullscreenChannel = document.querySelector('.fullscreen .channel-overlay');
+                if (fullscreenChannel) {
+                    fullscreenChannel.textContent = channelInput.value || '';
+                }
+            }
+            
+            function toggleChannelOpacity() {
+                const currentOpacity = getComputedStyle(document.documentElement).getPropertyValue('--channel-opacity');
+                document.documentElement.style.setProperty('--channel-opacity', currentOpacity === '0' ? '0.7' : '0');
+                
+                const fullscreenChannel = document.querySelector('.fullscreen .channel-overlay');
+                if (fullscreenChannel) {
+                    fullscreenChannel.style.opacity = currentOpacity === '0' ? '0.7' : '0';
+                }
+            }
+            
+            function increaseChannelSize() {
+                let currentSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--channel-font-size'));
+                if (isNaN(currentSize)) currentSize = 30;
+                const newSize = Math.min(60, currentSize + 2);
+                document.documentElement.style.setProperty('--channel-font-size', `${newSize}px`);
+                
+                const fullscreenChannel = document.querySelector('.fullscreen .channel-overlay');
+                if (fullscreenChannel) {
+                    fullscreenChannel.style.fontSize = `${newSize}px`;
+                }
+            }
+            
+            function decreaseChannelSize() {
+                let currentSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--channel-font-size'));
+                if (isNaN(currentSize)) currentSize = 30;
+                const newSize = Math.max(12, currentSize - 2);
+                document.documentElement.style.setProperty('--channel-font-size', `${newSize}px`);
+                
+                const fullscreenChannel = document.querySelector('.fullscreen .channel-overlay');
+                if (fullscreenChannel) {
+                    fullscreenChannel.style.fontSize = `${newSize}px`;
+                }
+            }
+            
+            function moveChannel(direction) {
+                let currentX = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--channel-position-x'));
+                let currentY = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--channel-position-y'));
+                
+                if (isNaN(currentX)) currentX = 50;
+                if (isNaN(currentY)) currentY = 20;
+                
+                switch(direction) {
+                    case 'up':
+                        currentY = Math.max(10, currentY - 10);
+                        break;
+                    case 'down':
+                        currentY += 10;
+                        break;
+                    case 'left':
+                        currentX = Math.max(10, currentX - 5);
+                        break;
+                    case 'right':
+                        currentX = Math.min(90, currentX + 5);
+                        break;
+                }
+                
+                document.documentElement.style.setProperty('--channel-position-x', `${currentX}%`);
+                document.documentElement.style.setProperty('--channel-position-y', `${currentY}px`);
+                
+                const fullscreenChannel = document.querySelector('.fullscreen .channel-overlay');
+                if (fullscreenChannel) {
+                    fullscreenChannel.style.left = `${currentX}%`;
+                    fullscreenChannel.style.top = `${currentY}px`;
+                }
+            }
+            
+            // Media Controls
+            function handleMusicUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (audioElement) {
+                    audioElement.pause();
+                    audioElement.remove();
+                }
+                
+                audioElement = new Audio(URL.createObjectURL(file));
+                audioElement.loop = true;
+            }
+            
+            function playMusic() {
+                if (audioElement) {
+                    audioElement.play();
+                }
+            }
+            
+            function pauseMusic() {
+                if (audioElement) {
+                    audioElement.pause();
+                }
+            }
+            
+            function stopMusic() {
+                if (audioElement) {
+                    audioElement.pause();
+                    audioElement.currentTime = 0;
+                }
+            }
+            
+            // Background Controls
+            function handleBackgroundChange() {
+                visualizationArea.className = '';
+                visualizationArea.classList.add('bg-' + this.value);
+                
+                if (bgVideoElement) {
+                    bgVideoElement.remove();
+                    bgVideoElement = null;
+                }
+                
+                visualizationArea.style.backgroundImage = '';
+                
+                if (this.value === 'custom-image' || this.value === 'custom-video') {
+                    bgUpload.click();
+                }
+            }
+            
+            function handleBackgroundUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (bgStyleControl.value === 'custom-image') {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        visualizationArea.classList.add('bg-custom');
+                        visualizationArea.style.backgroundImage = `url(${event.target.result})`;
+                        
+                        const fullscreenArea = document.querySelector('.fullscreen #visualization-area');
+                        if (fullscreenArea) {
+                            fullscreenArea.style.backgroundImage = `url(${event.target.result})`;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                } else if (bgStyleControl.value === 'custom-video') {
+                    if (bgVideoElement) {
+                        bgVideoElement.remove();
+                    }
+                    
+                    bgVideoElement = document.createElement('video');
+                    bgVideoElement.src = URL.createObjectURL(file);
+                    bgVideoElement.autoplay = true;
+                    bgVideoElement.loop = true;
+                    bgVideoElement.muted = true;
+                    bgVideoElement.classList.add('bg-video');
+                    visualizationArea.appendChild(bgVideoElement);
+                    
+                    const fullscreenArea = document.querySelector('.fullscreen #visualization-area');
+                    if (fullscreenArea) {
+                        const fullscreenVideo = bgVideoElement.cloneNode();
+                        fullscreenVideo.classList.add('bg-video');
+                        fullscreenArea.appendChild(fullscreenVideo);
+                    }
+                }
+            }
+            
+            // Fullscreen Controls
+            function showFullscreenPreview() {
+                fullscreenPreview.classList.add('active');
+                fullscreenCountdown.textContent = "Starting full preview in 3...";
+                
+                setTimeout(() => {
+                    fullscreenCountdown.textContent = "Starting full preview in 2...";
+                    setTimeout(() => {
+                        fullscreenCountdown.textContent = "Starting full preview in 1...";
+                        setTimeout(() => {
+                            enterFullscreen();
+                            fullscreenPreview.classList.remove('active');
+                        }, 1000);
+                    }, 1000);
+                }, 1000);
+            }
+            
+            function enterFullscreen() {
+                const container = document.getElementById('container');
+                container.classList.add('fullscreen');
+                
+                // Clone overlays to fullscreen
+                const fullscreenTopic = topicOverlay.cloneNode(true);
+                const fullscreenChannel = channelOverlay.cloneNode(true);
+                const fullscreenArea = document.querySelector('.fullscreen #visualization-area');
+                
+                fullscreenArea.insertBefore(fullscreenTopic, fullscreenArea.firstChild);
+                fullscreenArea.insertBefore(fullscreenChannel, fullscreenArea.firstChild);
+                
+                // Clone background to fullscreen
+                const bgStyle = bgStyleControl.value;
+                fullscreenArea.className = '';
+                fullscreenArea.classList.add('bg-' + bgStyle);
+                
+                if (bgStyle === 'custom-image') {
+                    fullscreenArea.style.backgroundImage = visualizationArea.style.backgroundImage;
+                } else if (bgStyle === 'custom-video' && bgVideoElement) {
+                    const fullscreenVideo = bgVideoElement.cloneNode();
+                    fullscreenVideo.classList.add('bg-video');
+                    fullscreenArea.appendChild(fullscreenVideo);
+                }
+                
+                // Position first item at the edge of the screen
+                const fullscreenSlider = document.querySelector('.fullscreen .slider');
+                fullscreenSlider.style.left = '100%';
+                fullscreenSlider.style.animation = 'none';
+                void fullscreenSlider.offsetHeight;
+                fullscreenSlider.style.animation = `slide ${speedControl.value}s linear infinite`;
+                
+                container.requestFullscreen().catch(function(err) {
+                    console.error('Error attempting to enable fullscreen:', err);
+                    container.classList.remove('fullscreen');
+                });
+            }
+            
+            function handleFullscreenChange() {
+                const container = document.getElementById('container');
+                if (!document.fullscreenElement) {
+                    container.classList.remove('fullscreen');
+                }
+            }
+            
+            // Touch Controls
+            function handleTouchStart(e) {
+                if (e.touches.length === 2) {
+                    startX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    startY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    startDistance = Math.hypot(
+                        e.touches[1].clientX - e.touches[0].clientX,
+                        e.touches[1].clientY - e.touches[0].clientY
+                    );
+                }
+            }
+            
+            function handleTouchMove(e) {
+                if (e.touches.length === 2 && document.fullscreenElement) {
+                    e.preventDefault();
+                    
+                    const currentDistance = Math.hypot(
+                        e.touches[1].clientX - e.touches[0].clientX,
+                        e.touches[1].clientY - e.touches[0].clientY
+                    );
+                    
+                    const newScale = scale * (currentDistance / startDistance);
+                    slider.style.transform = `scale(${newScale})`;
+                }
+            }
+            
+            function handleTouchEnd() {
+                scale = parseFloat(slider.style.transform.replace('scale(', '').replace(')', '')) || 1;
+            }
+            
+            // Style Updates
+            function updateSpacing() {
+                document.documentElement.style.setProperty('--item-spacing', `${this.value}px`);
+            }
+            
+            function updateWidth() {
+                document.documentElement.style.setProperty('--item-width', `${this.value}px`);
+            }
+            
+            function updateSpeed() {
+                slider.style.animationDuration = `${this.value}s`;
+            }
+            
+            function updateColor() {
+                if (useRandomColors) return;
+                
+                const items = document.querySelectorAll('.comparison-item');
+                items.forEach(item => {
+                    item.style.backgroundColor = this.value;
+                });
+            }
+            
+            function updateMaterial() {
+                const items = document.querySelectorAll('.comparison-item');
+                items.forEach(item => {
+                    item.classList.remove('material-marble', 'material-wood', 'material-metal', 'material-gold', 'material-glass');
+                    
+                    if (this.value !== 'default') {
+                        item.classList.add(`material-${this.value}`);
+                    }
+                });
+            }
+            
+            function updateShape() {
+                const items = document.querySelectorAll('.comparison-item');
+                items.forEach(item => {
+                    item.classList.remove('rectangle', 'circle', 'rounded-rect', 'diamond', 'hexagon', 'pill', 'star', 'triangle');
+                    item.classList.add(this.value);
+                    
+                    item.style.borderRadius = '';
+                    item.style.transform = '';
+                    item.style.clipPath = '';
+                    item.style.width = '';
+                    item.style.height = '';
+                    
+                    switch(this.value) {
+                        case 'circle':
+                            item.style.borderRadius = '50%';
+                            item.style.width = item.style.height = '200px';
+                            break;
+                        case 'rounded-rect':
+                            item.style.borderRadius = '20px';
+                            break;
+                        case 'diamond':
+                            item.style.transform = 'rotate(45deg)';
+                            item.style.width = '180px';
+                            item.style.height = '180px';
+                            break;
+                        case 'hexagon':
+                            item.style.clipPath = 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)';
+                            item.style.width = '180px';
+                            item.style.height = '200px';
+                            break;
+                        case 'pill':
+                            item.style.borderRadius = '100px';
+                            break;
+                        case 'star':
+                            item.style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+                            item.style.width = '180px';
+                            item.style.height = '180px';
+                            break;
+                        case 'triangle':
+                            item.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)';
+                            item.style.width = '180px';
+                            item.style.height = '180px';
+                            break;
+                        default:
+                            item.style.borderRadius = '0';
+                            item.style.transform = '';
+                            item.style.clipPath = '';
+                    }
+                });
+            }
+            
+            function updateVisualizationStyle() {
+                const items = document.querySelectorAll('.comparison-item');
+                items.forEach(item => {
+                    item.classList.remove('visualization-default', 'visualization-walking', 'visualization-floating', 'visualization-barchart', 'visualization-pulsing');
+                    item.classList.add(`visualization-${this.value}`);
+                    
+                    if (this.value === 'barchart') {
+                        const value = item.dataset.value || 100;
+                        const maxValue = Math.max(...Array.from(document.querySelectorAll('.comparison-item'))
+                            .map(el => parseFloat(el.dataset.value || 100)));
+                        const percent = (value / maxValue) * 100;
+                        item.style.setProperty('--item-value-percent', percent);
+                    }
+                });
+            }
+            
+            function applyRandomColors() {
+                const items = document.querySelectorAll('.comparison-item');
+                items.forEach(item => {
+                    const originalColor = item.dataset.originalColor || colorControl.value;
+                    if (useRandomColors) {
+                        const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+                        item.style.backgroundColor = randomColor;
+                    } else {
+                        item.style.backgroundColor = originalColor;
+                    }
+                });
+            }
+            
+            // Initialize the app
+            init();
+            updateMediaSelectionUI();
+        });
+    </script>
+</body>
+</html>
